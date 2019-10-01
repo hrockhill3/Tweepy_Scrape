@@ -1,0 +1,157 @@
+from tweepy import API 
+from tweepy import Cursor
+from tweepy.streaming import StreamListener
+from tweepy import OAuthHandler
+from tweepy import Stream
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+from textblob import TextBlob
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import re
+import nltk
+import datetime
+
+sid = SentimentIntensityAnalyzer()
+
+        
+
+# # # # TWITTER CLIENT # # # #
+class TwitterClient():
+    def __init__(self, twitter_user=None):
+        self.auth = TwitterAuthenticator().authenticate_twitter_app()
+        self.twitter_client = API(self.auth)
+
+        self.twitter_user = twitter_user
+
+    def get_twitter_client_api(self):
+        return self.twitter_client
+
+    def get_user_timeline_tweets(self, num_tweets):
+        tweets = []
+        for tweet in Cursor(self.twitter_client.user_timeline, id=self.twitter_user).items(num_tweets):
+            tweets.append(tweet)
+        return tweets
+
+    def get_friend_list(self, num_friends):
+        friend_list = []
+        for friend in Cursor(self.twitter_client.friends, id=self.twitter_user).items(num_friends):
+            friend_list.append(friend)
+        return friend_list
+
+
+# # # # TWITTER AUTHENTICATER # # # #
+class TwitterAuthenticator():
+
+    def authenticate_twitter_app(self):
+        auth = OAuthHandler("soP8g4asL5HjIXKomGuWfa00D", "FqL91Dvwsw9eNHemiN2afvLx86d06WCCVXlc2LtWnAk5LAwhsk")
+        auth.set_access_token('1122655921035808770-IvkyCVCiAe78gkisXdTwRFQtXm477B', "NYpIL8XjQ6y9iJwFxXuj8Yk12vATvwdpjenr6VhDbVy6m")
+        return auth
+
+# # # # TWITTER STREAMER # # # #
+class TwitterStreamer():
+    """
+    Class for streaming and processing live tweets.
+    """
+    def __init__(self):
+        self.twitter_autenticator = TwitterAuthenticator()    
+
+    def stream_tweets(self, fetched_tweets_filename, hash_tag_list):
+        # This handles Twitter authetification and the connection to Twitter Streaming API
+        listener = TwitterListener(fetched_tweets_filename)
+        auth = self.twitter_autenticator.authenticate_twitter_app() 
+        stream = Stream(auth, listener)
+
+        # This line filter Twitter Streams to capture data by the keywords: 
+        stream.filter(track=hash_tag_list)
+
+
+# # # # TWITTER STREAM LISTENER # # # #
+class TwitterListener(StreamListener):
+    """
+    This is a basic listener that just prints received tweets to stdout.
+    """
+    def __init__(self, fetched_tweets_filename):
+        self.fetched_tweets_filename = fetched_tweets_filename
+
+    def on_data(self, data):
+        try:
+            print(data)
+            with open(self.fetched_tweets_filename, 'a') as tf:
+                tf.write(data)
+            return True
+        except BaseException as e:
+            print("Error on_data %s" % str(e))
+        return True
+          
+    def on_error(self, status):
+        if status == 420:
+            # Returning False on_data method in case rate limit occurs.
+            return False
+        print(status)
+
+
+class TweetAnalyzer():
+    """
+    Functionality for analyzing and categorizing content from tweets.
+    """
+    
+    def clean_tweet(self, tweet):
+        return ' '.join(re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", tweet).split())
+
+    def analyze_sentiment(self, tweet):
+        analysis = sid.polarity_scores(self.clean_tweet(tweet))
+        return(analysis)
+
+    def tweets_to_data_frame(self, tweets):
+        df = pd.DataFrame(data=[tweet.text for tweet in tweets], columns=['tweets'])
+
+        df['date'] = np.array([tweet.created_at for tweet in tweets])
+        df['likes'] = np.array([tweet.favorite_count for tweet in tweets])
+        df['retweets'] = np.array([tweet.retweet_count for tweet in tweets])
+        
+        return df
+
+ 
+if __name__ == '__main__':
+
+    twitter_client = TwitterClient()
+    tweet_analyzer = TweetAnalyzer()
+
+    api = twitter_client.get_twitter_client_api()
+    
+    """
+username = 
+startDate = datetime.datetime(2019, 4, 1, 0, 0, 0)
+endDate = datetime.datetime(2019, 9, 1, 0, 0, 0)
+
+tmpTweets = api.user_timeline(username, count = 20)
+for tweet in tmpTweets:
+if tweet.created_at < endDate and tweet.created_at > startDate:
+tweets.append(tweet)
+
+while (tmpTweets[-1].created_at > startDate):
+print("Last Tweet @", tmpTweets[-1].created_at, " - fetching some more")
+tmpTweets = api.user_timeline(username, max_id = tmpTweets[-1].id)
+for tweet in tmpTweets:
+if tweet.created_at < endDate and tweet.created_at > startDate:
+tweets.append(tweet)"""   
+    
+    
+    screen_name_list = ['ASqared06','drayblatche','ReggieEvans30','KevinGarnett5KG','ShaunLivingston','paulpierce34','masonplumlee','TokoShengelia23','tyshawntaylor','marquisteague25','jasonterry31','OfficialMT23','DeronWilliams','DeMarreCarroll1','allencrabbe','eddavisXVII','JaredDudley619','KennethFaried35','TreBall21','215tahj','ShabazzNapier','alantwilliams','Dloading','_bigjayy_','SDinwiddie_25','RODIONS1','CarisLeVert','DzMusa','tpinsonn','taureanprince','_claxton33','KDTrey5','DeAndre','KyrieIrving','dnwaba0','HenryEllenson13','BrooklynNets']
+    hash_tag_list = ["betonbrooklyn", "wegohard", "brooklyngrit", "wecametoplay", "representbrooklyn", "wearebrooklyn", "hellobrooklyn", "BrooklynNets", "Brooklyn Nets"]
+    game_date_list = ['2013-10-12 0:00:00','2013-10-15 0:00:00','2013-10-17 0:00:00','2013-11-01 0:00:00','2013-11-05 0:00:00','2013-11-09 0:00:00','2013-11-18 0:00:00','2013-11-24 0:00:00','2013-11-27 0:00:00','2013-12-03 0:00:00','2013-12-05 0:00:00','2013-12-10 0:00:00','2013-12-12 0:00:00','2013-12-16 0:00:00','2013-12-18 0:00:00','2013-12-23 0:00:00','2013-12-25 0:00:00','2013-12-27 0:00:00','2014-01-04 0:00:00','2014-01-06 0:00:00','2014-01-08 0:00:00','2014-01-10 0:00:00','2014-01-21 0:00:00','2014-01-24 0:00:00','2014-01-27 0:00:00','2014-01-31 0:00:00','2014-02-03 0:00:00','2014-02-06 0:00:00','2014-02-09 0:00:00','2014-02-12 0:00:00','2014-03-03 0:00:00','2014-03-05 0:00:00','2014-03-09 0:00:00','2014-03-10 0:00:00','2014-03-17 0:00:00','2014-03-19 0:00:00','2014-03-21 0:00:00','2014-03-28 0:00:00','2014-03-30 0:00:00','2014-04-01 0:00:00','2014-04-04 0:00:00','2014-04-11 0:00:00','2014-04-13 0:00:00','2014-04-15 0:00:00','2018-10-03 0:00:00','2018-10-19 0:00:00','2018-10-28 0:00:00','2018-10-31 0:00:00','2018-11-02 0:00:00','2018-11-04 0:00:00','2018-11-14 0:00:00','2018-11-17 0:00:00','2018-11-23 0:00:00','2018-11-25 0:00:00','2018-11-28 0:00:00','2018-11-30 0:00:00','2018-12-03 0:00:00','2018-12-05 0:00:00','2018-12-07 0:00:00','2018-12-14 0:00:00','2018-12-16 0:00:00','2018-12-18 0:00:00','2018-12-21 0:00:00','2018-12-23 0:00:00','2018-12-26 0:00:00','2019-01-02 0:00:00','2019-01-09 0:00:00','2019-01-14 0:00:00','2019-01-21 0:00:00','2019-01-23 0:00:00','2019-01-25 0:00:00','2019-01-29 0:00:00','2019-02-04 0:00:00','2019-02-06 0:00:00','2019-02-08 0:00:00','2019-02-21 0:00:00','2019-02-25 0:00:00','2019-02-27 0:00:00','2019-03-01 0:00:00','2019-03-04 0:00:00','2019-03-06 0:00:00','2019-03-11 0:00:00','2019-03-30 0:00:00','2019-04-01 0:00:00','2019-04-03 0:00:00','2019-04-10 0:00:00']
+    
+    tweets = api.user_timeline(screen_name="BrooklynNets", count=20)
+    
+    ###add screenname by tweet
+    ###add 7 day from game_date_list ~ game_date_list -7
+    ###add loop to Screen Name
+    ###add tweet containing hashtag from hashtag_list with qualifying date
+    
+    df = tweet_analyzer.tweets_to_data_frame(tweets)
+    df['sentiment'] = np.array([tweet_analyzer.analyze_sentiment(tweet) for tweet in df['tweets']])
+
+    print(df.head(10))
